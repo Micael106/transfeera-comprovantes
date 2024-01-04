@@ -1,0 +1,19 @@
+{
+  "name": "transfeera-comprovantes",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "micael lopes",
+  "license": "MIT",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.6.3",
+    "boxen": "^7.1.1",
+    "chalk": "^5.3.0",
+    "xlsx": "^0.18.5",
+    "yargs": "^17.7.2"
+  }
+}
