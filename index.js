@@ -42,7 +42,7 @@ export async function processXlsxFiles(rootDirectory) {
         const valor = sheetData[i][valorIndex];
 
         // Generate a filename based on the extracted values
-        const filename = `PGM_${favorecido}_${nomeLote}_${valor}.pdf`;
+        const filename = `PGM ${favorecido} ${nomeLote} (${valor}).pdf`;
 
         // Download the PDF file
         try {
@@ -91,3 +91,12 @@ function createDirectoryIfNotExists(directory) {
     fs.mkdirSync(directory);
   }
 }
+
+if (process.argv.length !== 3) {
+  console.error("Usage: node app.js <directory>");
+  process.exit(1);
+}
+
+const directoryPath = process.argv[2];
+
+processXlsxFiles(directoryPath);

@@ -3,13 +3,20 @@ const path = require("path");
 const xlsx = require("xlsx");
 const axios = require("axios");
 
+const downloadFolderName = "COMPROVANTES";
+
+function createDirectoryIfNotExists(directory) {
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory);
+  }
+}
+
 if (process.argv.length !== 3) {
   console.error("Usage: node app.js <directory>");
   process.exit(1);
 }
 
 const directoryPath = process.argv[2];
-const type = process.argv[3] ?? "recibo";
 
 if (
   !fs.existsSync(directoryPath) ||
@@ -31,6 +38,9 @@ fs.readdir(directoryPath, async (err, files) => {
   if (xlsxFiles.length === 0) {
     console.log(`No .xlsx files found in directory "${directoryPath}".`);
   } else {
+    const downloadFolderPath = path.join(directoryPath, downloadFolderName);
+    createDirectoryIfNotExists(downloadFolderPath);
+
     for (const file of xlsxFiles) {
       const filePath = path.join(directoryPath, file);
       const workbook = xlsx.readFile(filePath);
@@ -69,7 +79,15 @@ fs.readdir(directoryPath, async (err, files) => {
             const response = await axios.get(cellValue, {
               responseType: "arraybuffer",
             });
-            const pdfPath = path.join(directoryPath, filename);
+            const pdfPath = path.join(
+              downloadFolderPath,
+              file.split(".")[0],
+              filename
+            );
+            createDirectoryIfNotExists(
+              path.join(downloadFolderPath, file.split(".")[0])
+            );
+            //const pdfPath = path.join(downloadFolderPath, filename);
 
             // Save the PDF file
             fs.writeFileSync(pdfPath, Buffer.from(response.data));
