@@ -38,6 +38,7 @@ fs.readdir(directoryPath, async (err, files) => {
   if (xlsxFiles.length === 0) {
     console.log(`No .xlsx files found in directory "${directoryPath}".`);
   } else {
+    const devolvidoRows = [];
     const downloadFolderPath = path.join(directoryPath, downloadFolderName);
     createDirectoryIfNotExists(downloadFolderPath);
 
@@ -55,6 +56,9 @@ fs.readdir(directoryPath, async (err, files) => {
       const favorecidoIndex = sheetData[0].indexOf("Favorecido");
       const nomeLoteIndex = sheetData[0].indexOf("Nome do lote");
       const valorIndex = sheetData[0].indexOf("Valor");
+      const statusIndex = sheetData[0].indexOf("Status");
+      const cpfCnpjIndex = sheetData[0]?.indexOf("CPF ou CNPJ");
+      const emailIndex = sheetData[0]?.indexOf("Email");
 
       if (
         columnIndex !== -1 &&
@@ -64,12 +68,31 @@ fs.readdir(directoryPath, async (err, files) => {
       ) {
         console.log(`Downloading PDF files from file "${file}"...`);
         for (let i = 1; i < sheetData.length; i++) {
+          const status = sheetData[i][statusIndex];
           const cellValue = sheetData[i][columnIndex];
-
-          // Extract values for renaming the file
           const favorecido = sheetData[i][favorecidoIndex];
           const nomeLote = sheetData[i][nomeLoteIndex];
           const valor = sheetData[i][valorIndex];
+          const email = sheetData[i][emailIndex];
+          const cpfCnpj = sheetData[i][cpfCnpjIndex];
+
+          if (status === "DEVOLVIDO") {
+            devolvidoRows.push([
+              favorecido,
+              cpfCnpj,
+              email,
+              "",
+              "",
+              "",
+              "",
+              "",
+              valor,
+              "",
+              "",
+              nomeLote,
+            ]);
+            continue; // Skip because there is not comprovante
+          }
 
           // Generate a filename based on the extracted values
           const filename = `PGM ${favorecido} ${nomeLote} (${valor}).pdf`;
@@ -103,6 +126,42 @@ fs.readdir(directoryPath, async (err, files) => {
           `One or more required columns not found in file "${file}".`
         );
       }
+    }
+
+    if (devolvidoRows.length > 0) {
+      const outputWorkbook = xlsx.utils.book_new();
+      const headerRow = [
+        [
+          "Mantenha sempre o cabeçalho original da planilha e esta linha, mantendo os titulos e a ordem dos campos",
+        ],
+        [
+          "Nome ou Razão Social",
+          "CPF ou CNPJ",
+          "Email (opcional)",
+          "Banco",
+          "Agência",
+          "Conta",
+          "Dígito da conta",
+          "Tipo de Conta (Corrente ou Poupança)",
+          "Valor",
+          "ID integração (opcional)",
+          "Data de agendamento (opcional)",
+          "Descrição Pix (opcional)",
+        ],
+        ...devolvidoRows,
+      ];
+      const outputSheet = xlsx.utils.aoa_to_sheet(headerRow, {
+        "!merges": [{ s: { r: 0, c: 0 }, e: { r: 0, c: 11 } }],
+      });
+      xlsx.utils.book_append_sheet(outputWorkbook, outputSheet, "Devolvidos");
+      const outputFilePath = path.join(
+        downloadFolderPath,
+        "PGM DEVOLVIDOS.xlsx"
+      );
+      xlsx.writeFile(outputWorkbook, outputFilePath);
+      console.log(`New Excel file created pgm devolvidos: ${outputFilePath}`);
+    } else {
+      console.log("No rows with 'DEVOLVIDO' status found.");
     }
   }
 });
