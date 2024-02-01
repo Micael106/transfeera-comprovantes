@@ -76,7 +76,7 @@ fs.readdir(directoryPath, async (err, files) => {
           const email = sheetData[i][emailIndex];
           const cpfCnpj = sheetData[i][cpfCnpjIndex];
 
-          if (status === "DEVOLVIDO") {
+          if (status !== "FINALIZADO") {
             devolvidoRows.push([
               favorecido,
               cpfCnpj,
