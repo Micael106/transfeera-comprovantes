@@ -11,12 +11,32 @@ function createDirectoryIfNotExists(directory) {
   }
 }
 
-if (process.argv.length !== 3) {
-  console.error("Usage: node app.js <directory>");
-  process.exit(1);
-}
+const sanitizeFilename = (filename) => {
+  return filename.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+};
 
-const directoryPath = process.argv[2];
+const parseArgv = (argv) => {
+  return argv.reduce(
+    (hash, entry) => {
+      const [option, value = true] = entry.split("=");
+      const key = /^--/.test(option) ? option.slice(2) : "_";
+
+      if (key == "_") {
+        hash._.push(value);
+      } else {
+        hash[key] = value;
+      }
+
+      return hash;
+    },
+    { _: [] }
+  );
+};
+
+const { type, dir: directoryPath } = {
+  type: "pix",
+  ...parseArgv(process.argv),
+};
 
 if (
   !fs.existsSync(directoryPath) ||
@@ -27,6 +47,8 @@ if (
 }
 
 fs.readdir(directoryPath, async (err, files) => {
+  console.log(type, directoryPath);
+
   if (err) {
     console.error(`Error reading directory: ${err.message}`);
     process.exit(1);
@@ -52,80 +74,159 @@ fs.readdir(directoryPath, async (err, files) => {
         header: 1,
       });
 
-      const columnIndex = sheetData[0].indexOf("Comprovante Transfeera");
-      const favorecidoIndex = sheetData[0].indexOf("Favorecido");
-      const nomeLoteIndex = sheetData[0].indexOf("Nome do lote");
-      const valorIndex = sheetData[0].indexOf("Valor");
-      const statusIndex = sheetData[0].indexOf("Status");
-      const cpfCnpjIndex = sheetData[0]?.indexOf("CPF ou CNPJ");
-      const emailIndex = sheetData[0]?.indexOf("Email");
+      // nova solucao para considerar o tipo boleto agora
+      const dictType = {
+        boletos: [
+          "Boleto",
+          "Valor",
+          "Comprovante Transfeera",
+          "Status",
+          "Linha digitável",
+          "Nome do lote",
+        ],
+        pix: [
+          "Comprovante Transfeera",
+          "Favorecido",
+          "Nome do lote",
+          "Valor",
+          "Status",
+          "CPF ou CNPJ",
+          "Email",
+        ],
+      };
 
-      if (
-        columnIndex !== -1 &&
-        favorecidoIndex !== -1 &&
-        nomeLoteIndex !== -1 &&
-        valorIndex !== -1
-      ) {
-        console.log(`Downloading PDF files from file "${file}"...`);
-        for (let i = 1; i < sheetData.length; i++) {
-          const status = sheetData[i][statusIndex];
-          const cellValue = sheetData[i][columnIndex];
-          const favorecido = sheetData[i][favorecidoIndex];
-          const nomeLote = sheetData[i][nomeLoteIndex];
-          const valor = sheetData[i][valorIndex];
-          const email = sheetData[i][emailIndex];
-          const cpfCnpj = sheetData[i][cpfCnpjIndex];
+      // todo: alterar o codigo para extrair os dados do excel for ele for do tipo "boletos"
 
-          if (status !== "FINALIZADO") {
-            devolvidoRows.push([
-              favorecido,
-              cpfCnpj,
-              email,
-              "",
-              "",
-              "",
-              "",
-              "",
-              valor,
-              "",
-              "",
-              nomeLote,
-            ]);
-            continue; // Skip because there is not comprovante
-          }
+      if (type === "pix") {
+        const columnIndex = sheetData[0].indexOf("Comprovante Transfeera");
+        const favorecidoIndex = sheetData[0].indexOf("Favorecido");
+        const nomeLoteIndex = sheetData[0].indexOf("Nome do lote");
+        const valorIndex = sheetData[0].indexOf("Valor");
+        const statusIndex = sheetData[0].indexOf("Status");
+        const cpfCnpjIndex = sheetData[0]?.indexOf("CPF ou CNPJ");
+        const emailIndex = sheetData[0]?.indexOf("Email");
 
-          // Generate a filename based on the extracted values
-          const filename = `PGM ${favorecido} ${nomeLote} (${valor}).pdf`;
+        if (
+          columnIndex !== -1 &&
+          favorecidoIndex !== -1 &&
+          nomeLoteIndex !== -1 &&
+          valorIndex !== -1
+        ) {
+          console.log(`Downloading PDF files from file "${file}"...`);
+          for (let i = 1; i < sheetData.length; i++) {
+            const status = sheetData[i][statusIndex];
+            const cellValue = sheetData[i][columnIndex];
+            const favorecido = sheetData[i][favorecidoIndex];
+            const nomeLote = sheetData[i][nomeLoteIndex];
+            const valor = sheetData[i][valorIndex];
+            const email = sheetData[i][emailIndex];
+            const cpfCnpj = sheetData[i][cpfCnpjIndex];
 
-          // Download the PDF file
-          try {
-            const response = await axios.get(cellValue, {
-              responseType: "arraybuffer",
-            });
-            const pdfPath = path.join(
-              downloadFolderPath,
-              file.split(".")[0],
-              filename
-            );
-            createDirectoryIfNotExists(
-              path.join(downloadFolderPath, file.split(".")[0])
-            );
-            //const pdfPath = path.join(downloadFolderPath, filename);
+            if (status !== "FINALIZADO") {
+              devolvidoRows.push([
+                favorecido,
+                cpfCnpj,
+                email,
+                "",
+                "",
+                "",
+                "",
+                "",
+                valor,
+                "",
+                "",
+                nomeLote,
+              ]);
+              continue; // Skip because there is not comprovante
+            }
 
-            // Save the PDF file
-            fs.writeFileSync(pdfPath, Buffer.from(response.data));
-            console.log(`Downloaded and saved: ${pdfPath}`);
-          } catch (error) {
-            console.error(
-              `Error downloading PDF from ${cellValue}: ${error.message}`
-            );
+            // Generate a filename based on the extracted values
+            const filename = `PGM ${favorecido} ${nomeLote} (${valor})_${new Date().getTime()}.pdf`;
+
+            // Download the PDF file
+            try {
+              const response = await axios.get(cellValue, {
+                responseType: "arraybuffer",
+              });
+              const pdfPath = path.join(
+                downloadFolderPath,
+                file.split(".")[0],
+                filename
+              );
+              createDirectoryIfNotExists(
+                path.join(downloadFolderPath, file.split(".")[0])
+              );
+              //const pdfPath = path.join(downloadFolderPath, filename);
+
+              // Save the PDF file
+              fs.writeFileSync(pdfPath, Buffer.from(response.data));
+              console.log(`Downloaded and saved: ${pdfPath}`);
+            } catch (error) {
+              console.error(
+                `Error downloading PDF from ${cellValue}: ${error.message}`
+              );
+            }
           }
         }
-      } else {
-        console.log(
-          `One or more required columns not found in file "${file}".`
-        );
       }
+
+      if (type === "boletos") {
+        const columnIndex = sheetData[0].indexOf("Comprovante Banco");
+        const boletoIndex = sheetData[0].indexOf("Boleto");
+        const nomeLoteIndex = sheetData[0].indexOf("Nome do lote");
+        const valorIndex = sheetData[0].indexOf("Valor");
+        const statusIndex = sheetData[0].indexOf("Status");
+        const linhaDigitavelIndex = sheetData[0]?.indexOf("Linha digitável");
+
+        if (
+          columnIndex !== -1 &&
+          boletoIndex !== -1 &&
+          nomeLoteIndex !== -1 &&
+          valorIndex !== -1 &&
+          linhaDigitavelIndex !== -1
+        ) {
+          console.log(`Downloading PDF files from file "${file}"...`);
+          for (let i = 1; i < sheetData.length; i++) {
+            //const status = sheetData[i][statusIndex];
+            const cellValue = sheetData[i][columnIndex];
+            //const linhaDigitavel = sheetData[i][linhaDigitavelIndex];
+            const nomeLote = sheetData[i][nomeLoteIndex];
+            const valor = sheetData[i][valorIndex];
+            const boleto = sheetData[i][boletoIndex];
+
+            // Generate a filename based on the extracted values
+            const filename = sanitizeFilename(
+              `PGM ${boleto} ${nomeLote} (${valor}).pdf`
+            );
+
+            // Download the PDF file
+            try {
+              const response = await axios.get(cellValue, {
+                responseType: "arraybuffer",
+              });
+              const pdfPath = path.join(
+                downloadFolderPath,
+                file.split(".")[0],
+                filename
+              );
+              createDirectoryIfNotExists(
+                path.join(downloadFolderPath, file.split(".")[0])
+              );
+              //const pdfPath = path.join(downloadFolderPath, filename);
+
+              // Save the PDF file
+              fs.writeFileSync(pdfPath, Buffer.from(response.data));
+              console.log(`Downloaded and saved: ${pdfPath}`);
+            } catch (error) {
+              console.error(
+                `Error downloading PDF from ${cellValue}: ${error.message}`
+              );
+            }
+          }
+        }
+      }
+
+      //console.log(`One or more required columns not found in file "${file}".`);
     }
 
     if (devolvidoRows.length > 0) {
